@@ -2,8 +2,8 @@
 # AI Agents & LLM Tool Files
 # ==========================================
 .agent/
-.agents/
-.claude/
+.agents/skills
+.claude/skills
 *.agent
 *.claude
 
