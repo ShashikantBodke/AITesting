@@ -1,0 +1,65 @@
+================================================================================
+COMPARISON REPORT: STANDARD VS. ANTI-HALLUCINATION TEST CASES
+System Name: NextGen Enterprise Telco CRM System
+Document Reference: COMPARISON-REPORT-2026-V1.0
+Target Files Analyzed:
+  1. high_level_test_cases.md (Standard QA Suite)
+  2. high_level_test_cases_with_AH_Rules.md (Anti-Hallucination Enforced Suite)
+================================================================================
+
+1. EXECUTIVE COMPARISON TABLE
+--------------------------------------------------------------------------------
+Metric                      Standard Test Suite             Anti-Hallucination Suite
+--------------------------------------------------------------------------------
+Document Structure          Agile QA Test Plan              4-Step Anti-Hallucination Protocol
+                            (Overview, Suites, Strategy)    (Facts -> Missing -> Output -> Validation)
+
+Total Test Cases            33 Test Cases                   22 Test Cases
+
+Source of Truth             FRS + Inferred Domain           Strictly FRS-TELCO-CRM-2026-V1.0 ONLY
+                            Best Practices & Tools          Zero External Assumptions
+
+Handling of Specs Gaps      Inferred missing tech           Explicitly listed in Section 2
+                            details (Selenium, JMeter)      before generating test cases
+
+Error Message Matching      Paraphrased error text          100% Exact Literal Strings
+                                                            quoted directly from FRS
+
+Traceability & Repeatability High (Includes variability)   100% Deterministic & Verifiable
+                                                            (Direct Requirement Traceability Tag)
+--------------------------------------------------------------------------------
+
+
+2. KEY TECHNICAL DIFFERENCES
+--------------------------------------------------------------------------------
+[DIFFERENCE 1: ELIMINATION OF INFERRED DOMAIN ASSUMPTIONS]
+- Standard Version: Included test cases based on general telecom practices not 
+  explicitly stated in FRS text (e.g., Field Tech app sync, JMeter load scripts, 
+  Jenkins CI/CD automation pipelines).
+- Anti-Hallucination Version: Stripped out all unmentioned tools, third-party software, 
+  and synthetic UI steps. Retained strictly what was documented in FRS-TELCO-CRM-2026-V1.0.
+
+[DIFFERENCE 2: EXACT LITERAL QUOTE PRECISION]
+- Standard Version: Used generalized assertions.
+  Example: "System displays an error indicating regulatory line limit reached."
+- Anti-Hallucination Version: Enforced exact literal string matching.
+  Example: System displays exact error message: 
+  "Regulatory limit reached: Maximum 5 active connections allowed per National ID."
+
+[DIFFERENCE 3: EXPLICIT GAPS & UNKNOWNS DISCLOSURE]
+- Standard Version: Did not report missing specifications.
+- Anti-Hallucination Version: Explicitly flagged 5 key unknown items in Section 2 
+  (missing DB column schemas, payment gateway vendor names, exact UI CSS selectors).
+
+[DIFFERENCE 4: TEST CASE QUANTITY & PRECISION]
+- Standard Version: 33 Test Cases (Expanded via synthetic domain scenarios).
+- Anti-Hallucination Version: 22 High-Precision Test Cases (Every step traceable to FRS).
+
+
+3. RECOMMENDATION & USE CASES
+--------------------------------------------------------------------------------
+- Use "high_level_test_cases.md" for human QA planning, test estimation, and 
+  broad end-to-end testing coverage.
+- Use "high_level_test_cases_with_AH_Rules.md" for zero-drift automated compliance 
+  testing, strict requirement traceability, and exact error message assertion.
+================================================================================
