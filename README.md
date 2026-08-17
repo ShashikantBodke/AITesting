@@ -1,6 +1,6 @@
 # AI Testing Project
 
-Welcome to the **AI Testing** repository. This project is dedicated to exploring, testing, and evaluating AI and Generative AI models, workflows, and integrations.
+Welcome to the **AI Testing** repository. This project is dedicated to exploring, testing, and evaluating AI and Generative AI models, workflows, and integrations
 
 ## 📌 Overview
 
