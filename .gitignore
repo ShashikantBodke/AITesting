@@ -4,6 +4,8 @@
 .agent/
 .agents/
 .claude/
+agent/
+skills-lock.json
 *.agent
 *.claude
 
