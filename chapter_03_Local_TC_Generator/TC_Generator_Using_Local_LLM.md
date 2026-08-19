@@ -1,5 +1,4 @@
-# TC_Generation_us
-ing_Local_LLM.md
+# TC_Generation_using_Local_LLM.md
 
 **Test Case ID:** TC-001 – Basic Subscriber Onboarding
 **Module/Feature:** Subscriber Registration & eKYC Verification
