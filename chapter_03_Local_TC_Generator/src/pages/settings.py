@@ -1,64 +1,86 @@
 import streamlit as st
-from src.config_store import get_config, update_config
+from config_store import load_config, save_config
+from jira_client import test_connection as test_jira_connection, AuthenticationError, ConnectionError, JiraError
+from llm_client import test_ollama, test_groq
 
-st.set_page_config(page_title="Settings - RICE-POT", page_icon="⚙️")
+st.set_page_config(page_title="Settings — Jira Test Case Generator", page_icon="⚙️", layout="centered")
 
-st.title("Settings")
+st.title("⚙️ Settings")
 
-with st.form("settings_form"):
-    st.subheader("Jira Configuration")
-    jira_url = st.text_input("Jira URL", value=get_config("JIRA_URL"))
-    jira_email = st.text_input("Jira Email", value=get_config("JIRA_EMAIL"))
-    jira_api_token = st.text_input("Jira API Token", value=get_config("JIRA_API_TOKEN"), type="password")
+# Load current config
+config = load_config()
 
-    if st.form_submit_button("Test Jira Connection"):
-        # We need to temporarily save the current inputs to test them
-        update_config("JIRA_URL", jira_url)
-        update_config("JIRA_EMAIL", jira_email)
-        update_config("JIRA_API_TOKEN", jira_api_token)
-        
-        from src.jira_client import test_jira_connection
-        result = test_jira_connection()
-        if result["success"]:
-            st.success(result["message"])
-        else:
-            st.error(result["message"])
+# === Jira Settings ===
+st.subheader("🔗 Jira Connection")
+jira_url = st.text_input("Jira URL", value=config.get("jira_url", ""), placeholder="https://your-org.atlassian.net")
+jira_email = st.text_input("Jira Email", value=config.get("jira_email", ""), placeholder="you@example.com")
+jira_token = st.text_input("Jira API Token", value=config.get("jira_api_token", ""), type="password")
 
-    st.subheader("LLM Provider")
-    provider_options = ["Ollama", "Groq"]
-    current_provider = get_config("LLM_PROVIDER", "Ollama").capitalize()
-    
-    # Ensure current_provider matches options safely
-    if current_provider not in provider_options:
-        current_provider = "Ollama"
-        
-    llm_provider = st.radio(
-        "Select LLM Provider", 
-        options=provider_options, 
-        index=provider_options.index(current_provider)
+if st.button("Test Jira Connection"):
+    # Temporarily save to test
+    save_config({**config, "jira_url": jira_url, "jira_email": jira_email, "jira_api_token": jira_token})
+    try:
+        name = test_jira_connection()
+        st.success(f"Connected as **{name}**")
+    except AuthenticationError:
+        st.error("Authentication failed. Check email and API token.")
+    except ConnectionError:
+        st.error(f"Cannot reach {jira_url}. Check the URL.")
+    except JiraError as e:
+        st.error(str(e))
+
+st.markdown("---")
+
+# === LLM Settings ===
+st.subheader("🤖 LLM Provider")
+provider = st.radio(
+    "Select LLM provider",
+    options=["ollama", "groq"],
+    index=0 if config.get("llm_provider", "ollama") == "ollama" else 1,
+    format_func=lambda x: f"Ollama (local, gemma3:1b)" if x == "ollama" else "Groq (cloud)",
+    help="Ollama runs locally. Groq is the cloud fallback.",
+)
+
+groq_key = ""
+if provider == "groq":
+    groq_key = st.text_input(
+        "Groq API Key",
+        value=config.get("groq_api_key", ""),
+        type="password",
+        help="Get your key at https://console.groq.com/keys",
     )
 
-    st.subheader("Ollama Configuration (Local)")
-    ollama_url = st.text_input("Ollama URL", value=get_config("OLLAMA_URL", "http://localhost:11434"))
-    ollama_model = st.text_input("Ollama Model", value=get_config("OLLAMA_MODEL", "qwen3.5:2b"))
+col1, col2 = st.columns(2)
+with col1:
+    if st.button("Test Ollama"):
+        if test_ollama():
+            st.success("Ollama is running!")
+        else:
+            st.error("Cannot reach Ollama at localhost:11434")
 
-    st.subheader("Groq Configuration (Fallback)")
-    groq_api_key = st.text_input("Groq API Key", value=get_config("GROQ_API_KEY"), type="password")
-    groq_model = st.text_input("Groq Model", value=get_config("GROQ_MODEL", "llama-3.1-8b-instant"))
+with col2:
+    if st.button("Test Groq"):
+        save_config({**config, "groq_api_key": groq_key})
+        if test_groq():
+            st.success("Groq API key is valid!")
+        else:
+            st.error("Invalid Groq API key or network error")
 
-    submitted = st.form_submit_button("Save Settings")
+st.markdown("---")
 
-    if submitted:
-        update_config("JIRA_URL", jira_url)
-        update_config("JIRA_EMAIL", jira_email)
-        update_config("JIRA_API_TOKEN", jira_api_token)
-        
-        update_config("LLM_PROVIDER", llm_provider)
-        
-        update_config("OLLAMA_URL", ollama_url)
-        update_config("OLLAMA_MODEL", ollama_model)
-        
-        update_config("GROQ_API_KEY", groq_api_key)
-        update_config("GROQ_MODEL", groq_model)
-        
-        st.success("Settings saved successfully!")
+# === Save ===
+if st.button("💾 Save Settings", type="primary"):
+    new_config = {
+        "jira_url": jira_url,
+        "jira_email": jira_email,
+        "jira_api_token": jira_token,
+        "llm_provider": provider,
+        "groq_api_key": groq_key if provider == "groq" else config.get("groq_api_key", ""),
+    }
+    save_config(new_config)
+    st.success("Settings saved! Go back to [Chat](/) to start generating test cases.")
+    st.balloons()
+
+# === Current config display ===
+st.markdown("---")
+st.caption("Settings are stored in `config.json` (git-ignored). Credentials from `.env` seed the initial values.")

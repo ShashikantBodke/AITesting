@@ -1,91 +1,206 @@
-import streamlit as st
 import re
 from pathlib import Path
-from src.jira_client import fetch_ticket
-from src.llm_client import generate_test_cases
 
-# Page config
-st.set_page_config(page_title="RICE-POT QA App", page_icon="🤖")
+import streamlit as st
 
-st.title("RICE-POT: Jira Test Case Generator")
+from config_store import load_config, get_setting
+from jira_client import fetch_ticket, JiraError, AuthenticationError, NotFoundError, ConnectionError
+from llm_client import generate, LLMError
 
-# Sidebar toggle for LLM Provider
-with st.sidebar:
-    st.subheader("Quick Settings")
-    from src.config_store import get_config, update_config
-    
-    current_provider = get_config("LLM_PROVIDER", "Ollama").capitalize()
-    if current_provider not in ["Ollama", "Groq"]:
-        current_provider = "Ollama"
-        
-    new_provider = st.radio(
-        "Active LLM Provider", 
-        ["Ollama", "Groq"],
-        index=["Ollama", "Groq"].index(current_provider)
+st.set_page_config(page_title="Jira Test Case Generator", page_icon="🧪", layout="centered")
+
+# === Template loading ===
+BASE_DIR = Path(__file__).parent
+TEMPLATE_DIR = BASE_DIR.parent / "templates"
+
+
+@st.cache_data
+def load_template(name: str = "testcase_creator.md") -> str:
+    path = TEMPLATE_DIR / name
+    if not path.exists():
+        return ""
+    return path.read_text()
+
+
+def build_prompt(ticket: dict, template: str) -> str:
+    """Merge ticket details into the test case template with a system prefix."""
+    desc = ticket["description"] or ""
+    ac = ticket.get("acceptance_criteria", "")
+    requirements = desc
+    if ac:
+        requirements += f"\n\nAcceptance Criteria:\n{ac}"
+
+    # Estimate number of test cases based on requirement complexity
+    word_count = len(requirements.split())
+    num = max(3, min(10, word_count // 40))
+
+    prompt = template.replace("[NUMBER]", str(num))
+    prompt = prompt.replace("[PASTE REQUIREMENTS HERE]", requirements)
+
+    # Prepend system instruction for small models that tend to ramble
+    system_prefix = (
+        "INSTRUCTION: You are a test case generator. Output ONLY a markdown table "
+        "with these exact columns: Test ID, Test Title, Pre-conditions, Test Steps, Test Data, Expected Result, Priority, Type. "
+        "No preamble, no closing notes, no extra columns. Output NOTHING but the table.\n\n"
     )
-    
-    if new_provider != current_provider:
-        update_config("LLM_PROVIDER", new_provider)
-        st.rerun()
+    return system_prefix + prompt
 
-# Initialize chat history
+
+def clean_output(text: str) -> str:
+    """Strip markdown code fences, ensure proper table format, clean whitespace."""
+    text = text.strip()
+
+    # Remove markdown code fences if present
+    if text.startswith("```"):
+        text = text.split("\n", 1)[-1] if "\n" in text else text
+    if text.endswith("```"):
+        text = text.rsplit("\n```", 1)[0] if "\n```" in text else text
+
+    lines = [l.strip() for l in text.split("\n") if l.strip()]
+
+    # Filter out empty pipe-only lines and non-table lines (preamble/notes)
+    table_lines = [l for l in lines if l.startswith("|") and len(l) > 3]
+
+    if not table_lines:
+        return text  # return as-is if no table found
+
+    # Check if we have a header row followed by a separator row
+    has_header = len(table_lines) >= 2 and all(
+        c.strip() in ("---", ":---", "---:", ":---:", "===") or set(c.strip()) <= {"-", ":"}
+        for c in table_lines[1].split("|")[1:-1]
+    )
+    has_sep = len(table_lines) >= 2 and all(
+        c.strip().replace("-", "").replace(":", "") == ""
+        for c in table_lines[1].split("|")[1:-1]
+    )
+
+    if not has_sep:
+        # No separator row found — build proper table
+        # First line is data; prepend header and separator
+        cols = ["Test ID", "Test Title", "Pre-conditions", "Test Steps", "Test Data", "Expected Result", "Priority", "Type"]
+        header = "| " + " | ".join(cols) + " |"
+        sep = "|" + "|".join([" --- " for _ in cols]) + "|"
+        if has_header:
+            # First line might be a header without separator — skip it
+            table_lines = table_lines[1:]
+        return "\n".join([header, sep] + table_lines)
+
+    return "\n".join(table_lines)
+
+
+# === Session state init ===
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Display chat messages from history on app rerun
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+# === Sidebar ===
+with st.sidebar:
+    st.markdown("## ⚙️ Quick Info")
+    config = load_config()
+    provider = config.get("llm_provider", "ollama")
+    st.caption(f"**LLM Provider:** {provider.upper()}")
+    st.caption(f"**Model:** gemma3:1b" if provider == "ollama" else "**Model:** llama-3.1-8b-instant")
+    jira_url = config.get("jira_url", "")
+    st.caption(f"**Jira:** {jira_url or 'Not configured'}")
 
-# Accept user input
-if prompt := st.chat_input("E.g., create test cases for QA-102"):
-    # Add user message to chat history
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    # Display user message in chat message container
+    if not jira_url or not config.get("jira_email"):
+        st.warning("Configure Jira in Settings →")
+
+    st.markdown("---")
+    st.markdown("[Settings](settings)")
+
+# === Title ===
+st.title("🧪 Jira Test Case Generator")
+st.caption("Type a Jira ticket key and I'll generate test cases using the local LLM.")
+
+# === Chat history ===
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+
+# === Chat input ===
+if prompt_text := st.chat_input("Ask me to create test cases for a Jira ticket..."):
+    # Display user message
+    st.session_state.messages.append({"role": "user", "content": prompt_text})
     with st.chat_message("user"):
-        st.markdown(prompt)
+        st.markdown(prompt_text)
 
-    # Process the request
-    with st.chat_message("assistant"):
-        message_placeholder = st.empty()
-        
-        # 1. Parse Jira key using a simple regex (e.g., ABC-123)
-        jira_keys = re.findall(r'[A-Z]+-[0-9]+', prompt)
-        
-        if not jira_keys:
-            response = "I couldn't find a Jira ticket key in your message. Please include a key like `QA-102`."
-            message_placeholder.markdown(response)
-        else:
-            issue_key = jira_keys[0]
-            
+    # Parse Jira key
+    match = re.search(r"\b[A-Z]+-\d+\b", prompt_text)
+    if not match:
+        reply = (
+            "I couldn't find a Jira ticket key in your message. "
+            "Please include one like `PROJ-123` or `QA-102`.\n\n"
+            "Example: \"Create test cases for **QA-102**\""
+        )
+        st.session_state.messages.append({"role": "assistant", "content": reply})
+        with st.chat_message("assistant"):
+            st.markdown(reply)
+    else:
+        ticket_key = match.group(0)
+
+        with st.chat_message("assistant"):
             try:
-                # 2. Fetch ticket details
-                message_placeholder.markdown(f"Fetching details for {issue_key} from Jira...")
-                ticket = fetch_ticket(issue_key)
-                
-                # 3. Load prompt template
-                template_path = Path(__file__).resolve().parent.parent / "template" / "testcase_creator.md"
-                if not template_path.exists():
-                    raise FileNotFoundError(f"Template not found at {template_path}")
-                
-                with open(template_path, "r") as f:
-                    template_content = f.read()
-                
-                # 4. Generate the prompt with merged context
-                requirements = f"Title: {ticket['summary']}\n\nDescription: {ticket['description']}"
-                
-                final_prompt = template_content.replace("[NUMBER]", "3 to 5").replace("[PASTE REQUIREMENTS HERE]", requirements)
-                
-                message_placeholder.markdown(f"Generating test cases for {issue_key}...")
-                
-                # 5. Call LLM
-                response = generate_test_cases(final_prompt)
-                
-                message_placeholder.markdown(response)
-                
+                # Step 1: Fetch ticket
+                with st.status(f"Fetching ticket **{ticket_key}** from Jira...", expanded=True) as status:
+                    ticket = fetch_ticket(ticket_key)
+                    status.update(
+                        label=f"Fetched **{ticket_key}**: {ticket['summary']}",
+                        state="complete",
+                        expanded=False,
+                    )
+
+                # Step 2: Load template
+                template = load_template()
+                if not template:
+                    reply = "Template `testcase_creator.md` not found in `templates/` folder."
+                    st.session_state.messages.append({"role": "assistant", "content": reply})
+                    st.markdown(reply)
+                else:
+                    # Step 3: Build prompt
+                    prompt = build_prompt(ticket, template)
+
+                    # Step 4: Generate test cases
+                    with st.status("Generating test cases...", expanded=True) as status:
+                        raw_result = generate(prompt)
+                        result = clean_output(raw_result)
+                        status.update(
+                            label="Test cases generated!",
+                            state="complete",
+                            expanded=False,
+                        )
+
+                    # Step 5: Render result
+                    reply = f"### {ticket_key}: {ticket['summary']}\n\n{result}"
+                    st.session_state.messages.append({"role": "assistant", "content": reply})
+                    st.markdown(reply)
+
+            except (AuthenticationError, ConnectionError) as e:
+                reply = (
+                    f"❌ **Configuration Error:** {e}\n\n"
+                    "Go to the [Settings](settings) page to fix this."
+                )
+                st.session_state.messages.append({"role": "assistant", "content": reply})
+                st.error(e)
+
+            except NotFoundError as e:
+                reply = f"❌ {e}"
+                st.session_state.messages.append({"role": "assistant", "content": reply})
+                st.error(e)
+
+            except JiraError as e:
+                reply = f"❌ **Jira Error:** {e}"
+                st.session_state.messages.append({"role": "assistant", "content": reply})
+                st.error(e)
+
+            except LLMError as e:
+                reply = (
+                    f"❌ **LLM Error:** {e}\n\n"
+                    "Try switching providers in the [Settings](settings) page."
+                )
+                st.session_state.messages.append({"role": "assistant", "content": reply})
+                st.error(e)
+
             except Exception as e:
-                response = f"**Error:** {str(e)}"
-                message_placeholder.markdown(response)
-        
-        # Add assistant response to chat history
-        st.session_state.messages.append({"role": "assistant", "content": response})
+                reply = f"❌ **Unexpected Error:** {e}"
+                st.session_state.messages.append({"role": "assistant", "content": reply})
+                st.error(e)

@@ -1,76 +1,133 @@
+import re
 import requests
 from requests.auth import HTTPBasicAuth
-from .config_store import get_config
+from config_store import get_setting
 
-def fetch_ticket(issue_key: str) -> dict:
-    """
-    Fetches the details of a Jira ticket.
-    Uses API v2 to retrieve descriptions as text rather than ADF.
-    """
-    jira_url = get_config("JIRA_URL").rstrip("/")
-    email = get_config("JIRA_EMAIL")
-    api_token = get_config("JIRA_API_TOKEN")
 
-    if not jira_url or not email or not api_token:
-        raise ValueError("Jira credentials are not fully configured. Please update in Settings.")
+class JiraError(Exception):
+    pass
 
-    # Using API v2 for easier plain-text/markdown descriptions
-    url = f"{jira_url}/rest/api/2/issue/{issue_key}"
-    
-    headers = {
-        "Accept": "application/json"
-    }
-    
-    auth = HTTPBasicAuth(email, api_token)
 
-    response = requests.get(url, headers=headers, auth=auth)
-    
-    if response.status_code == 200:
-        data = response.json()
-        fields = data.get("fields", {})
-        
-        # Try to find a custom field that might represent Acceptance Criteria
-        # This varies heavily by Jira instance, so we fall back to dumping it if we can't find it.
-        # Commonly customfield_10004 or similar, but without knowing, we pass raw_fields.
-        
-        return {
-            "key": data.get("key"),
-            "summary": fields.get("summary", ""),
-            "description": fields.get("description", ""),
-            "raw_fields": fields
-        }
-    elif response.status_code == 404:
-        raise ValueError(f"Issue {issue_key} not found or you don't have permission to view it.")
-    elif response.status_code == 401:
-        raise ValueError("Authentication failed. Check your Jira Email and API Token.")
-    else:
-        response.raise_for_status()
+class ConnectionError(JiraError):
+    pass
 
-def test_jira_connection() -> dict:
-    """
-    Tests the Jira connection and credentials by fetching the current user profile.
-    """
-    jira_url = get_config("JIRA_URL").rstrip("/")
-    email = get_config("JIRA_EMAIL")
-    api_token = get_config("JIRA_API_TOKEN")
 
-    if not jira_url or not email or not api_token:
-        return {"success": False, "message": "Jira credentials are not fully configured."}
+class AuthenticationError(JiraError):
+    pass
 
-    url = f"{jira_url}/rest/api/2/myself"
-    headers = {"Accept": "application/json"}
-    auth = HTTPBasicAuth(email, api_token)
+
+class NotFoundError(JiraError):
+    pass
+
+
+def _build_url(path: str) -> str:
+    base = get_setting("jira_url").rstrip("/")
+    return f"{base}{path}"
+
+
+def fetch_ticket(ticket_key: str) -> dict:
+    """Fetch a Jira ticket and return {key, summary, description, acceptance_criteria}."""
+    email = get_setting("jira_email")
+    token = get_setting("jira_api_token")
+
+    if not email or not token:
+        raise AuthenticationError(
+            "Jira credentials not configured. Go to Settings page to set them up."
+        )
+
+    url = _build_url(f"/rest/api/2/issue/{ticket_key}")
 
     try:
-        response = requests.get(url, headers=headers, auth=auth, timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            return {"success": True, "message": f"Successfully connected as {data.get('displayName', email)}!"}
-        elif response.status_code == 401:
-            return {"success": False, "message": "Authentication failed. Check your Email and API Token."}
-        elif response.status_code == 403:
-            return {"success": False, "message": "Permission denied. You may not have access."}
-        else:
-            return {"success": False, "message": f"Connection failed with status code: {response.status_code}. Response: {response.text}"}
-    except requests.exceptions.RequestException as e:
-        return {"success": False, "message": f"Failed to connect to Jira URL: {str(e)}"}
+        resp = requests.get(
+            url,
+            auth=HTTPBasicAuth(email, token),
+            headers={"Accept": "application/json"},
+            timeout=15,
+        )
+    except requests.exceptions.ConnectionError:
+        raise ConnectionError(
+            f"Cannot reach Jira at {get_setting('jira_url')}. Check the URL in Settings."
+        )
+    except requests.exceptions.Timeout:
+        raise ConnectionError("Jira request timed out. Check your network or Jira URL.")
+
+    if resp.status_code == 401:
+        raise AuthenticationError(
+            "Jira authentication failed. Check your email and API token in Settings."
+        )
+    if resp.status_code == 404:
+        raise NotFoundError(f"Ticket **{ticket_key}** not found.")
+    if not resp.ok:
+        raise JiraError(f"Jira error {resp.status_code}: {resp.text[:300]}")
+
+    data = resp.json()
+    fields = data.get("fields", {})
+
+    summary = fields.get("summary", "")
+    description_raw = fields.get("description", {})
+
+    if isinstance(description_raw, dict):
+        description = _extract_text_from_adf(description_raw)
+    else:
+        description = str(description_raw) if description_raw else ""
+
+    acceptance_criteria = _extract_acceptance_criteria(description, fields)
+
+    return {
+        "key": data.get("key", ticket_key),
+        "summary": summary,
+        "description": description,
+        "acceptance_criteria": acceptance_criteria,
+    }
+
+
+def _extract_text_from_adf(doc: dict) -> str:
+    """Extract plain text from Atlassian Document Format (ADF)."""
+    texts = []
+
+    def walk(node):
+        if node.get("type") == "text":
+            texts.append(node.get("text", ""))
+        for child in node.get("content", []):
+            walk(child)
+
+    walk(doc)
+    return "\n".join(texts)
+
+
+def _extract_acceptance_criteria(description: str, fields: dict) -> str:
+    """Try to pull acceptance criteria from description headers or custom fields."""
+    patterns = [
+        r"(?i)acceptance\s*criteria\s*:?\s*\n(.*?)(?=\n\s*\n\w|\Z)",
+        r"(?i)##\s*acceptance\s*criteria\s*\n(.*?)(?=\n#|\Z)",
+        r"(?i)ac\s*:?\s*\n(.*?)(?=\n\s*\n\w|\Z)",
+    ]
+    for pat in patterns:
+        match = re.search(pat, description, re.DOTALL)
+        if match:
+            return match.group(1).strip()
+
+    for key, value in fields.items():
+        if "acceptance" in key.lower() and value:
+            return str(value)
+
+    return ""
+
+
+def test_connection() -> str:
+    """Verify Jira credentials. Returns username on success, raises on failure."""
+    url = _build_url("/rest/api/2/myself")
+    email = get_setting("jira_email")
+    token = get_setting("jira_api_token")
+
+    resp = requests.get(
+        url,
+        auth=HTTPBasicAuth(email, token),
+        headers={"Accept": "application/json"},
+        timeout=10,
+    )
+    if resp.ok:
+        return resp.json().get("displayName", "Connected")
+    if resp.status_code == 401:
+        raise AuthenticationError("Invalid credentials")
+    raise JiraError(f"Error {resp.status_code}: {resp.text[:200]}")
