@@ -1,0 +1,78 @@
+Company	Job Title	Job Description
+Persistent Systems	Senior QA 	"What You'll Do:
+
+
+
+Performing test execution, test analysis and debugging
+Perform and manage the performance of test cases
+Used comprehensive SQL queries as part of back-end testing to validate the data that appears on the UI.
+Test to ensure the Business need is met and ready for production users
+
+
+Expertise You'll Bring:
+
+
+
+7+ years of experience as an Automation Engineer.
+Experience in JAVA, Selenium.
+Automation experience in Web UI, API Programming and testing.
+Experience in DaVita Application Nautilus is must.
+Candidate should have hands on experience in automating test cases using JAVA, Selenium.
+Should have ability to write Test cases using Element locators, WebDriver methods, Java programming features and TestNG Annotations
+Should have ability to develop test cases, build the framework, debug the framework.
+Should be able to add developed test cases in test suite and run the test suite.
+Knowledge of Best Test Automation Frameworks such as Selenium Java TestNG and Selenium with BDD Cucumber."
+FIS	Senior QA Automation Engineer	"What You Will Be Doing
+
+Design, develop, and maintain scalable automated test frameworks and reusable test assets
+Create automated test suites for functional, integration, API, regression, and end-to-end testing
+Collaborate with engineering teams to embed automation and quality practices early in development
+Validate software releases through comprehensive automated and risk-based testing strategies
+Integrate automated testing into CI/CD pipelines to support rapid and reliable deployments
+Perform API testing and service validation across distributed and cloud-based environments
+Analyze test results, identify root causes, and work with development teams to resolve defects
+Improve test coverage, maintainability, and execution efficiency across applications
+Monitor quality metrics and identify opportunities to enhance testing processes and product quality
+Contribute to quality standards, automation best practices, and continuous improvement initiatives
+
+Required Qualifications
+
+Bachelor’s degree in computer science, Engineering, Information Technology, or equivalent practical experience
+Experience designing, developing, and maintaining automated testing solutions for enterprise applications
+Hands-on expertise with automation frameworks such as Selenium, Cypress, Playwright, TestNG, JUnit, or similar tools
+Strong understanding of software testing methodologies, quality engineering principles, and Agile delivery practices
+Experience building and executing API tests using tools such as Postman, REST Assured, or equivalent technologies
+Knowledge of CI/CD pipelines and automation integration using modern DevOps practices
+Proficiency in one or more programming languages such as Java, Python, JavaScript, or C#
+Experience working with relational databases and validating data integrity through automated testing
+Strong analytical, troubleshooting, and problem-solving skills with attention to detail
+Excellent communication and collaboration skills with the ability to work effectively across global teams
+
+Preferred Qualifications
+
+Experience in financial services, fintech, regulatory technology, or enterprise software environments
+Knowledge of performance testing tools such as JMeter, Gatling, LoadRunner, or k6
+Experience with Docker, Kubernetes, and cloud platforms such as AWS, Azure, or Google Cloud
+Familiarity with behavior-driven development (BDD) frameworks and practices
+Understanding of security testing concepts, vulnerability assessment, and secure development practices
+Experience creating test automation strategies for microservices and distributed architectures"
+Accion Labs Digital Solutions	Senior QA 	"Design, develop, and maintain automation frameworks for web and mobile applications
+Lead automation strategy using tools such as Selenium, Appium, TestNG, Cypress, Playwright
+Drive CI/CD integration for automated test execution
+Perform code reviews and ensure automation best practices
+Mentor and guide junior SDETs and manual testers
+Provide test metrics, dashboards, and quality reports
+Work closely with DevOps and development teams for early defect detection
+Strong experience in Web & Mobile Testing (Android & iOS)
+Hands-on expertise in Manual and Automation Testing
+Solid understanding of SDLC, STLC, and Agile methodologies
+Experience in cross-browser and responsive testing
+Knowledge of API testing using Postman / Rest Assured / Swagger
+Experience with test management and defect tracking tools
+Proficiency in Java / Python / JavaScript
+Strong experience with Selenium, Appium, and modern automation tools
+Experience in BDD frameworks (Cucumber, SpecFlow)
+Exposure to CI/CD tools (Jenkins, Git, GitLab, Azure DevOps)
+Knowledge of version control systems (Git)"
+Deutsche Bank	Senior QA Engineer	"Company Category: Global Financial Product Engineering & Banking IT Services?? Role Overview: A high-impact leadership and technical role focused on modernizing legacy testing systems and leading the transition into predictive, intelligence-backed quality assurance.??? Core Technical Stack: Playwright, Selenium, AI-integrated testing frameworks, and CI/CD tools.? Key Responsibilities:Architect and execute the corporate vision for AI-driven automated testing across global platforms.Lead mid-to-senior engineering squads to implement continuous integration quality gates.Manage risk, test data strategies, and direct health reporting to executive product stakeholders."
+Tata Consultancy Services	QA Automation Engineer	"Role Title: QA Automation Engineer (Playwright Specialization)Experience Required: 6 to 10+ yearsCompany Category: IT Services, Consulting, and Enterprise Product Solutions?? Role Overview: Dedicated automation specialist role focused entirely on implementing next-generation web automation capabilities for global client products.??? Core Technical Stack: Playwright, JavaScript/TypeScript, API Testing, and Configuration Management.? Key Responsibilities:Develop end-to-end automation scripts using the modern Playwright ecosystem from scratch.Validate REST/SOAP APIs and integrate test execution within automated delivery pipelines.Participate in localized sprint planning, grooming sessions, and continuous code reviews."
